@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8" />
+<title>inemaupsk — upscale playground</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root {
+    --bg:#0e1116; --panel:#161b22; --line:#2a313c; --fg:#e6edf3; --mut:#8b949e;
+    --acc:#3fb950; --warn:#f0b000; --err:#f85149;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+         background:var(--bg); color:var(--fg); line-height:1.4; }
+  header { padding:16px 24px; border-bottom:1px solid var(--line); display:flex;
+           align-items:center; gap:16px; }
+  header h1 { margin:0; font-size:16px; font-weight:600; }
+  header .meta { color:var(--mut); font-size:12px; }
+  main { display:grid; grid-template-columns: 320px 1fr; gap:0; height:calc(100vh - 53px); }
+  .side { border-right:1px solid var(--line); padding:16px; overflow-y:auto; }
+  .stage { padding:16px 24px; overflow:auto; }
+  .group { margin-bottom:18px; }
+  .group h2 { font-size:11px; text-transform:uppercase; letter-spacing:.08em;
+              color:var(--mut); margin:0 0 8px 0; font-weight:600; }
+  .drop { border:1px dashed var(--line); border-radius:8px; padding:18px; text-align:center;
+          cursor:pointer; background:var(--panel); transition:border-color .15s; }
+  .drop.hover { border-color:var(--acc); }
+  .drop input { display:none; }
+  .drop .thumb { max-width:100%; max-height:160px; border-radius:4px; }
+  .drop .meta { font-size:11px; color:var(--mut); margin-top:6px; }
+  label.row { display:flex; align-items:center; gap:8px; padding:6px 0;
+              cursor:pointer; font-size:13px; }
+  label.row input { accent-color:var(--acc); }
+  button { width:100%; padding:10px 14px; border-radius:6px; border:1px solid var(--line);
+           background:var(--panel); color:var(--fg); font-size:13px; cursor:pointer;
+           font-weight:500; }
+  button.primary { background:var(--acc); border-color:var(--acc); color:#0a0f0c; }
+  button.primary:hover { filter:brightness(1.08); }
+  button.secondary { background:#21262d; }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  .stack > * + * { margin-top:8px; }
+  .status { font-size:12px; color:var(--mut); padding:6px 0; min-height:1.2em; }
+  .status.err { color:var(--err); }
+  .status.ok { color:var(--acc); }
+  .grid { display:grid; gap:16px; grid-template-columns:repeat(auto-fit, minmax(360px, 1fr)); }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:8px;
+          overflow:hidden; display:flex; flex-direction:column; }
+  .card .head { display:flex; justify-content:space-between; align-items:center;
+                padding:8px 12px; border-bottom:1px solid var(--line); font-size:12px; }
+  .card .head b { font-weight:600; }
+  .card .head .t { color:var(--mut); }
+  .card .body { background:#000; display:flex; align-items:center; justify-content:center;
+                min-height:240px; position:relative; }
+  .card img { display:block; max-width:100%; height:auto; cursor:zoom-in; }
+  .card .actions { padding:8px 12px; display:flex; gap:8px; border-top:1px solid var(--line); }
+  .card .actions a, .card .actions button {
+    flex:1; text-align:center; padding:6px; font-size:12px;
+    text-decoration:none; color:var(--fg); border:1px solid var(--line);
+    border-radius:4px; background:#21262d; cursor:pointer;
+  }
+  .empty { text-align:center; color:var(--mut); padding:60px 20px; font-size:13px; }
+  .loader { display:inline-block; width:14px; height:14px; border:2px solid var(--line);
+            border-top-color:var(--acc); border-radius:50%; animation:spin .8s linear infinite;
+            vertical-align:middle; margin-right:6px; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .lightbox { position:fixed; inset:0; background:rgba(0,0,0,.92); display:none;
+              align-items:center; justify-content:center; z-index:1000; cursor:zoom-out; padding:24px; }
+  .lightbox.open { display:flex; }
+  .lightbox img { max-width:100%; max-height:100%; }
+  .toggle { display:flex; gap:0; border:1px solid var(--line); border-radius:6px; overflow:hidden; }
+  .toggle button { flex:1; border:none; border-radius:0; padding:8px; background:var(--panel);
+                   font-size:12px; }
+  .toggle button.active { background:var(--acc); color:#0a0f0c; font-weight:600; }
+</style>
+</head>
+<body>
+<header>
+  <h1>inemaupsk</h1>
+  <span class="meta" id="hmeta">…</span>
+</header>
+
+<main>
+  <aside class="side stack">
+    <div class="group">
+      <h2>1. imagem</h2>
+      <label class="drop" id="drop">
+        <input type="file" id="file" accept="image/*" />
+        <div id="dropText">clique ou arraste uma imagem</div>
+        <img class="thumb" id="thumb" hidden />
+        <div class="meta" id="thumbMeta"></div>
+      </label>
+    </div>
+
+    <div class="group">
+      <h2>2. modo</h2>
+      <div class="toggle">
+        <button id="modeOne" class="active">um modelo</button>
+        <button id="modeAll">todos (comparar)</button>
+      </div>
+    </div>
+
+    <div class="group" id="grpModel">
+      <h2>3. modelo</h2>
+      <div id="modelList">carregando…</div>
+    </div>
+
+    <div class="group">
+      <button id="run" class="primary" disabled>upscale</button>
+      <div class="status" id="status"></div>
+    </div>
+  </aside>
+
+  <section class="stage">
+    <div id="empty" class="empty">resultados aparecem aqui</div>
+    <div id="grid" class="grid" hidden></div>
+  </section>
+</main>
+
+<div class="lightbox" id="lb"><img id="lbImg" /></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let imageB64 = null;
+let imageName = "image";
+let mode = "one";
+
+async function init() {
+  try {
+    const h = await (await fetch("/health")).json();
+    $("hmeta").textContent = `${h.available.length} modelos · max ${h.max_input_side}px · cache ${h.cached.length}`;
+    const r = await (await fetch("/models")).json();
+    renderModelList(r.models, r.default);
+  } catch (e) {
+    $("hmeta").textContent = "erro ao carregar /health";
+  }
+}
+function renderModelList(models, def) {
+  const wrap = $("modelList");
+  wrap.innerHTML = "";
+  models.forEach((m, i) => {
+    const id = "m_" + i;
+    const row = document.createElement("label");
+    row.className = "row";
+    row.innerHTML = `<input type="radio" name="model" id="${id}" value="${m}" ${m === def ? "checked" : ""}><span>${m.replace(/\.pth$/, "")}</span>`;
+    wrap.appendChild(row);
+  });
+}
+
+// drag & drop
+const drop = $("drop");
+["dragenter", "dragover"].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.add("hover"); }));
+["dragleave", "drop"].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.remove("hover"); }));
+drop.addEventListener("drop", ev => {
+  const f = ev.dataTransfer.files[0];
+  if (f) loadFile(f);
+});
+$("file").addEventListener("change", ev => {
+  const f = ev.target.files[0];
+  if (f) loadFile(f);
+});
+// also accept paste from clipboard
+window.addEventListener("paste", ev => {
+  for (const item of ev.clipboardData.items) {
+    if (item.type.startsWith("image/")) { loadFile(item.getAsFile()); return; }
+  }
+});
+
+function loadFile(f) {
+  imageName = (f.name || "image").replace(/\.[^.]+$/, "");
+  const r = new FileReader();
+  r.onload = () => {
+    imageB64 = r.result.split(",")[1];
+    $("thumb").src = r.result;
+    $("thumb").hidden = false;
+    $("dropText").hidden = true;
+    const img = new Image();
+    img.onload = () => {
+      $("thumbMeta").textContent = `${img.width} × ${img.height} · ${Math.round(f.size/1024)} KB`;
+    };
+    img.src = r.result;
+    $("run").disabled = false;
+  };
+  r.readAsDataURL(f);
+}
+
+// mode toggle
+$("modeOne").onclick = () => { mode = "one"; $("modeOne").classList.add("active"); $("modeAll").classList.remove("active"); $("grpModel").style.display=""; };
+$("modeAll").onclick = () => { mode = "all"; $("modeAll").classList.add("active"); $("modeOne").classList.remove("active"); $("grpModel").style.display="none"; };
+
+// run
+$("run").onclick = async () => {
+  if (!imageB64) return;
+  const status = $("status");
+  const grid = $("grid");
+  const empty = $("empty");
+  $("run").disabled = true;
+  empty.hidden = true;
+  grid.hidden = false;
+  grid.innerHTML = "";
+  const t0 = performance.now();
+  status.className = "status";
+  status.innerHTML = `<span class="loader"></span> processando…`;
+
+  try {
+    if (mode === "one") {
+      const model = document.querySelector('input[name="model"]:checked').value;
+      const r = await fetch("/upscale", {
+        method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ image: imageB64, model }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.detail || r.statusText);
+      addCard(data);
+    } else {
+      const r = await fetch("/upscale_all", {
+        method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ image: imageB64 }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.detail || r.statusText);
+      data.results.forEach(addCard);
+    }
+    const dt = ((performance.now() - t0) / 1000).toFixed(2);
+    status.className = "status ok";
+    status.textContent = `pronto em ${dt}s`;
+  } catch (e) {
+    status.className = "status err";
+    status.textContent = "erro: " + e.message;
+  } finally {
+    $("run").disabled = false;
+  }
+};
+
+function addCard(d) {
+  const card = document.createElement("div");
+  card.className = "card";
+  if (d.error) {
+    card.innerHTML = `<div class="head"><b>${d.model}</b><span class="t err">erro</span></div>
+                     <div class="body" style="color:#f85149;padding:20px;font-size:12px;">${d.error}</div>`;
+    $("grid").appendChild(card);
+    return;
+  }
+  const url = "data:image/png;base64," + d.image;
+  const name = d.model.replace(/\.pth$/, "");
+  const sz = d.output_size ? `${d.output_size[0]}×${d.output_size[1]}` : "";
+  card.innerHTML = `
+    <div class="head"><b>${name}</b><span class="t">${sz} · ${d.elapsed_s}s</span></div>
+    <div class="body"><img src="${url}" /></div>
+    <div class="actions">
+      <a download="${imageName}__${name}.png" href="${url}">baixar</a>
+    </div>`;
+  card.querySelector("img").onclick = (e) => {
+    $("lbImg").src = url;
+    $("lb").classList.add("open");
+  };
+  $("grid").appendChild(card);
+}
+$("lb").onclick = () => $("lb").classList.remove("open");
+
+init();
+</script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+fastapi>=0.110
+uvicorn[standard]>=0.29
+pydantic>=2
+pillow
+spandrel>=0.4
+spandrel_extra_arches>=0.2

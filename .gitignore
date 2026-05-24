@@ -1,0 +1,20 @@
+# weights (download via models/download.sh — too big for git)
+models/upscale/*.pth
+
+# generated images
+outputs/*
+!outputs/.gitkeep
+
+# python
+__pycache__/
+*.pyc
+.venv/
+
+# claude code tooling state
+.claude/
+
+# editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp

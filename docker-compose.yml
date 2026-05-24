@@ -1,0 +1,35 @@
+services:
+  inemaupsk:
+    build: .
+    image: inemaupsk:latest
+    container_name: inemaupsk
+    restart: unless-stopped
+
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - INEMAUPSK_MODEL=/app/models/upscale/4x-UltraSharp.pth
+
+    volumes:
+      - ./models:/app/models:ro
+      - ./outputs:/app/outputs
+      # Live-mount the UI so edits land without a rebuild (server reads via FileResponse).
+      - ./web:/app/web:ro
+
+    # 8000 is taken by inemaimg on the host. Expose this one on 8002.
+    ports:
+      - "0.0.0.0:8002:8000"
+
+    shm_size: "2g"
+
+    # SR is leaner than diffusion — cap well under inemaimg's 30G.
+    mem_limit: "8g"
+    memswap_limit: "8g"
+
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health').status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
